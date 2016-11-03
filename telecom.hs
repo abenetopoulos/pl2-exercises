@@ -1,41 +1,46 @@
 import System.IO as SIO
-import Data.ByteString.Lazy.Char8 as L
+import qualified Data.ByteString.Lazy.Char8 as L
+import qualified Data.Map.Strict as Map
 
+type Graph = Map.Map Int [Int]
 
-main = do --use bleeding 'interact' mate
+main = do 
     s <- L.hGetContents SIO.stdin
     let sep = L.lines s
         tups = extract_tuples sep
---    let listOfStrings = lines s
---        r = map extract_tuples listOfStrings
---        rs = print_shit r
+        desc = head tups
+        graph = generate_graph (tail tups)
+        -- now that we have the graph, we need to perform the search
     mapM_ print tups
+    print graph
     return ()
 
-extract_tuples :: [ByteString] -> [(Int, Int)]
-extract_tuples = Prelude.map (\x -> case func x of
-                            Nothing -> (-1, -1)
-                            Just s -> s) 
+extract_tuples :: [L.ByteString] -> [(Int, Int)]
+extract_tuples = 
+    Prelude.map (\x -> case func x of
+                       Nothing -> (-1, -1)
+                       Just s -> s) 
     where
         func s = 
-            --L.putStrLn s >>
-            case L.readInt s of
+            case (L.readInt s) of
             Nothing -> Nothing
             Just (fNode, rest) ->
-                case L.readInt rest of
-                Nothing -> Nothing
+                case (L.readInt . L.tail $ rest) of
+                Nothing -> Just (fNode, -1)
                 Just (sNode, more) -> Just (fNode, sNode)
-func s = 
-    case L.readInt s of
-    Nothing -> Nothing
-    Just (fNode, rest) ->
-        case L.readInt rest of
-        Nothing -> Nothing
-        Just (sNode, more) -> Just (fNode, sNode)
 
---extract_tuples :: String -> (a , a)
---extract_tuples = map (\x -> fst . head $ x) . map param_reads . words
---
---param_reads x = reads x :: [(Int, String)]
---
---print_shit x = map (\e -> show . head $ e) x
+generate_graph :: [(Int, Int)] -> Graph
+generate_graph x = graph
+    where
+        aux m (l, r) =
+            let firstL = 
+                    case (Map.lookup l m) of
+                    Nothing -> [r]
+                    Just lst -> (r : lst)
+                firstNew = Map.insert l firstL m
+                secondL = 
+                    case (Map.lookup r firstNew) of
+                    Nothing -> [l]
+                    Just lst -> (l : lst)
+            in Map.insert r secondL firstNew
+        graph = foldl aux Map.empty x
