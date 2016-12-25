@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -static -rtsopts -O2 -optc-O2 #-}
+{-# OPTIONS_GHC -static -rtsopts -O2 -optc-O2 -fprof-auto #-}
 import System.IO as SIO
 import qualified Data.ByteString.Lazy.Char8 as L
 import qualified Data.Map.Strict as Map
@@ -47,8 +47,9 @@ dfs g =
             case (Map.lookup k timesMap) of
             Nothing ->
                 let newTimesMap = Map.insert k ((time, -1), k, False) timesMap
-                    (finalTime, auxTimes, _, _) = search_on_peds v k (time + 1) g newTimesMap (time + 1) 0
-                    latestTimes = Map.insert k ((time, finalTime), k, (check_root auxTimes)) auxTimes
+                    (finalTime, auxTimes, _, _) = search v k (time + 1) g newTimesMap (time + 1) 0
+                    rootIsCut = (check_root auxTimes)
+                    latestTimes = Map.insert k ((time, finalTime), k, rootIsCut) auxTimes
                 in (finalTime + 1, latestTimes)
             Just _ -> (time, timesMap)
         times = snd (aux (1, Map.empty) 1 (get_elem g))
@@ -84,7 +85,6 @@ search (n : ns) parent time graph times candidateLowPoint maxLowPoint =
             else
                 --parent has a back edge, we should signify this
                 search ns parent time graph times (min start candidateLowPoint) maxLowPoint
-
 
 get_elem g = elems
     where
