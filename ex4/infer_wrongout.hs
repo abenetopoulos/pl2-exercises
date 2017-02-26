@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -static -rtsopts -O2 -optc-O2 -fprof-auto #-}
+{- OPTIONS_GHC -static -rtsopts -O2 -optc-O2 -fprof-auto #-}
 import System.IO as SIO
 import qualified Data.ByteString.Lazy.Char8 as L
 import qualified Data.Map.Strict as Map
@@ -14,8 +14,8 @@ main = do
         terms = parse_terms termStrings
         logicalTypes = map (\x -> infer Map.empty x 0) terms
         actualTypes = map (\(t, c, _) -> unify t c) logicalTypes
-        printableTypes = map (\x -> finalize x) actualTypes
-    mapM display_type printableTypes
+    mapM print logicalTypes
+    mapM display_type actualTypes
     return ()
 
 get_terms s =
@@ -84,6 +84,11 @@ unify typ (c@(ls, rs) : cs) =
             Function _ _ -> True
             _ -> False
 
+        basic_type t =
+            case t of
+            BasicType _ -> True
+            _ -> False
+
         q `in_term` t =
             case t of
             Function arg body ->
@@ -101,14 +106,24 @@ unify typ (c@(ls, rs) : cs) =
                 Function arg body ->
                     Function (modify sourcet arg) (modify sourcet body)
                 BasicType e ->
-                    BasicType e
+                    if e > s then
+                        BasicType (e - 1)
+                    else
+                        BasicType e
+
         replace_in_sig sourcet endt typ =
             case typ of
             BasicType e ->
                 if (sourcet == typ) then
                     endt
                 else
-                    typ
+                    let
+                        BasicType s = sourcet
+                    in
+                        if e > s then
+                            BasicType (e - 1)
+                        else
+                            typ
             Function arg body ->
                 Function (replace_in_sig sourcet endt arg) (replace_in_sig sourcet endt body)
 
@@ -131,6 +146,13 @@ unify typ (c@(ls, rs) : cs) =
     in
         if ls == rs then
             unify typ cs
+        else if (basic_type ls && basic_type rs) then
+            let
+                (minVal, oldVal) = get_min ls rs
+                newType = replace_in_sig oldVal minVal typ
+                newConstraintSet = replace_in_constraints oldVal minVal cs
+            in
+                newConstraintSet `seq` unify newType newConstraintSet
         else if (function_type ls && function_type rs) then
             let
                 Function lsArg lsBody = ls
@@ -153,32 +175,6 @@ unify typ (c@(ls, rs) : cs) =
                 newConstraintSet `seq` unify newType newConstraintSet
         else
             TypeError
-
-finalize t =
-    let
-        aux counter localMap t =
-            case t of
-            Function arg body ->
-                let
-                    (newArg, newCounter, newMap) = aux counter localMap arg
-                    (newBody, newCounter', newMap') = aux newCounter newMap body
-                in
-                    (Function newArg newBody, newCounter', newMap')
-            BasicType i ->
-                case (Map.lookup i localMap) of
-                Nothing ->
-                    let
-                        nt = BasicType counter
-                        newMap = Map.insert i counter localMap
-                    in (nt, counter + 1, newMap)
-                Just e ->
-                    (BasicType e, counter, localMap)
-
-        (newType, _, _) = aux 0 Map.empty t
-    in
-        case t of
-        TypeError -> TypeError
-        _ -> newType
 
 display_type ty = do
     pretty_print ty
