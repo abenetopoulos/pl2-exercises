@@ -1,8 +1,8 @@
-/*NOTE: there needs to be a var telling us the direction we are currently moving in wrt
- * the program counter
- * Also, we can either read a program in befunge, and convert it to some intermediate representation,
- * which we then pass to Run(), or keep it as is, and pass that to Run()... pros/cons of each approach?
+/* TODO:
+ *  - printing seems fucked, fix
+ *  - there seems to be no further need for the "byte" struct
  * */
+
 
 #include <stdio.h>
 #include <assert.h>
@@ -10,11 +10,16 @@
 #include <stdbool.h>
 #include <time.h>
 
-#define NUM_ROWS 80
-#define NUM_COLUMNS 25
+//#define NUM_ROWS 80
+//#define NUM_COLUMNS 25
+#define NUM_ROWS 25
+#define NUM_COLUMNS 80
 
-#define TO_ASCII(x) (x) + 0x30
-#define FROM_ASCII(x) (x) - 0x30
+#define TO_ASCII(x) ((x) + 0x30)
+#define FROM_ASCII(x) ((x) - 0x30)
+#define IS_NUM(c) ((c) >= 0x30 && (c) <= 0x39)
+#define IS_CHAR(c) (((c) >= 0x61 && (c) <= 0x7a) || ((c) >= 0x61 && (c) <= 0x7a))
+
 
 typedef signed long int data_byte;
 
@@ -106,6 +111,19 @@ data_byte Pop(stack* currentStack) {
     return res;
 }
 
+void Examine(stack* currentStack) {
+    assert(currentStack);
+
+    printf("DEBUG: start of stack trace\n");
+    stack_cell *temp = currentStack->top;
+    while (temp != NULL) {
+        printf("val: %ld ASCII: %c\n", temp->val, (char) temp->val);
+        temp = temp->next;
+    }
+
+    printf("DEBUG: end of stack trace\n");
+}
+
 data_byte Peek(stack* currentStack) {
     assert(currentStack);
 
@@ -132,7 +150,8 @@ void ReadProgram(FILE *input) {
             i++;
             j = 0;
         }else {
-            if (c >= 0x30 && c <= 0x39) {
+            if ((IS_CHAR(c) && (c != 'p' || c != 'q')) || IS_NUM(c)) {
+            //if (c >= 0x30 && c <= 0x39 || (c >= )) {
                 program[i][j].isCommand = false;
                 program[i][j++].c = c;
             }else {
@@ -160,18 +179,14 @@ void Run() {
     int currentRow = 0, currentColumn = 0;
     pc_direction currentDirection = DIR_RIGHT;
     stack* programStack = (stack*) malloc(sizeof(stack));
+    programStack->top = NULL;
 
     srand(time(NULL));
 
     for (;;) {
         pc = &program[currentRow][currentColumn];
 
-        if (!pc->isCommand) {
-            if (inStringMode)
-                Push(programStack, pc->c);
-            else
-                Push(programStack, FROM_ASCII(pc->c));
-        }else {
+        if (!inStringMode) {
             switch (pc->c) {
                 case '+':
                     {
@@ -273,6 +288,7 @@ void Run() {
                     }
                 case '_':
                     {
+                        //Examine(programStack);
                         data_byte cond = Pop(programStack);
 
                         if (cond)
@@ -323,7 +339,7 @@ void Run() {
                     {
                         data_byte c = Pop(programStack);
 
-                        printf("%c\n", (char) c);
+                        printf("%c", (char) c);
 
                         break;
                     }
@@ -390,9 +406,16 @@ void Run() {
                 case '@':
                     goto terminate;
                 default:
+                    Push(programStack, FROM_ASCII(pc->c));
                     break;
+                    //printf("ERROR: unrecognized command \"%c\", will terminate\n", pc->c);
+                    //goto terminate;
             }
-
+        }else {
+            if (pc->c == '"')
+                inStringMode = !inStringMode;
+            else
+                Push(programStack, pc->c);
         }
 
         UpdatePosition(&currentRow, &currentColumn, currentDirection);
