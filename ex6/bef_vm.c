@@ -1,8 +1,3 @@
-/* TODO:
- *  - printing seems fucked, fix
- * */
-
-
 #include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
@@ -12,7 +7,7 @@
 //#define NUM_ROWS 80
 //#define NUM_COLUMNS 25
 #define NUM_ROWS 25
-#define NUM_COLUMNS 80
+#define NUM_COLUMNS 95
 
 #define TO_ASCII(x) ((x) + 0x30)
 #define FROM_ASCII(x) ((x) - 0x30)
@@ -76,63 +71,56 @@ typedef struct stack_cell_t {
 } stack_cell;
 
 typedef struct {
-    stack_cell* top;
+    //stack_cell* top;
+    int top;
+    int allocatedAmount;
+    data_byte* elems;
 } stack;
+
+void InitStack(stack* currentStack) { //TODO: handle failures
+    currentStack->top = -1;
+    currentStack->allocatedAmount = NUM_ROWS * NUM_COLUMNS;
+    currentStack->elems = (data_byte *) malloc(currentStack->allocatedAmount * sizeof(data_byte));
+}
 
 void Push(stack* currentStack, data_byte toPush) {
     assert(currentStack);
 
-    if (currentStack->top == NULL) {
-        currentStack->top = (stack_cell *) malloc (sizeof(stack_cell));
-        currentStack->top->val = toPush;
-        currentStack->top->next = NULL;
-    }else {
-        stack_cell *temp = (stack_cell *) malloc (sizeof(stack_cell));
-        temp->val = toPush;
-        temp->next = currentStack->top;
-        currentStack->top = temp;
+    if (currentStack->top + 1 == currentStack->allocatedAmount) {
+        data_byte* temp = (data_byte *) malloc(2 * currentStack->allocatedAmount * sizeof(data_byte));
+
+        for (int i = 0; i <= currentStack->top; i++) {
+            temp[i] = currentStack->elems[i];
+        }
+
+        free(currentStack->elems);
+        currentStack->elems = temp;
+        currentStack->allocatedAmount *= 2;
     }
+
+    currentStack->elems[++currentStack->top] = toPush;
 }
 
 data_byte Pop(stack* currentStack) {
     assert(currentStack);
 
-    if (currentStack->top == NULL) {
+    if (currentStack->top == -1) {
         Push(currentStack, 0);
         return 0;
     }
 
-    stack_cell *temp = currentStack->top;
-    data_byte res = temp->val;
-    currentStack->top = currentStack->top->next;
-
-    free(temp);
-
-    return res;
-}
-
-void Examine(stack* currentStack) {
-    assert(currentStack);
-
-    printf("DEBUG: start of stack trace\n");
-    stack_cell *temp = currentStack->top;
-    while (temp != NULL) {
-        printf("val: %ld ASCII: %c\n", temp->val, (char) temp->val);
-        temp = temp->next;
-    }
-
-    printf("DEBUG: end of stack trace\n");
+    return currentStack->elems[currentStack->top--];
 }
 
 data_byte Peek(stack* currentStack) {
     assert(currentStack);
 
-    if (currentStack->top == NULL) {
+    if (currentStack->top == -1) {
         Push(currentStack, 0);
         return 0;
     }
 
-    return currentStack->top->val;
+    return currentStack->elems[currentStack->top];
 }
 
 void ReadProgram(FILE *input) {
@@ -150,7 +138,6 @@ void ReadProgram(FILE *input) {
             j = 0;
         }else {
             if ((IS_CHAR(c) && (c != 'p' || c != 'q')) || IS_NUM(c)) {
-            //if (c >= 0x30 && c <= 0x39 || (c >= )) {
                 program[i][j++].c = c;
             }else {
                 program[i][j++].c = c;
@@ -171,9 +158,9 @@ void UpdatePosition(int* currentRow, int* currentColumn, pc_direction currentDir
     }
 }
 
-void UpdateAddresses(void *labelTab[]) {
-    for (int i = 0; i < NUM_ROWS; i++) {
-        for (int j = 0; j < NUM_COLUMNS; j++) {
+void UpdateAddresses(void *labelTab[], int rowMin, int rowMax, int colMin, int colMax) {
+    for (int i = rowMin; i < rowMax; i++) {
+        for (int j = colMin; j < colMax; j++) {
             switch (program[i][j].c) {
                 case '+':
                     program[i][j].addr = labelTab[(int)COMMAND_ADD];
@@ -299,11 +286,11 @@ void Run() {
     byte* pc;
     int currentRow = 0, currentColumn = 0;
     pc_direction currentDirection = DIR_RIGHT;
-    stack* programStack = (stack*) malloc(sizeof(stack));
-    programStack->top = NULL;
+    stack* programStack = (stack *) malloc(sizeof(stack));
+    InitStack(programStack);
 
     srand(time(NULL));
-    UpdateAddresses(labelTab);
+    UpdateAddresses(labelTab, 0, NUM_ROWS, 0, NUM_COLUMNS);
 
     for (;;) {
         pc = &program[currentRow][currentColumn];
@@ -614,6 +601,7 @@ setPLLabel:
                         data_byte val = Pop(programStack);
 
                         program[y][x].c = (char) val;
+                        UpdateAddresses(labelTab, y, y + 1, x, x + 1);
                         UpdatePosition(&currentRow, &currentColumn, currentDirection);
                         pc = &program[currentRow][currentColumn];
                         NEXT_INSTRUCTION;
