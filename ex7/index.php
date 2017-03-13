@@ -2,8 +2,8 @@
 
 session_start();
 
-$minVal = 1;
-$maxVal = 100;
+$minVal = 1000;
+$maxVal = 1000000;
 
 if (isset($_POST['reset']))
     $_SESSION['shouldGenerate'] = True;
@@ -23,7 +23,7 @@ function validate($code) {
     curl_setopt($ch, CURLOPT_HTTPHEADER, array("Content-Type: text/plain"));
     curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
     $output = curl_exec($ch);
-    $_SESSION['execOutput'] = $output;
+    $_SESSION['execOutput'] = trim($output);
     $response = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
     curl_close($ch);
@@ -131,7 +131,7 @@ if (isset($_POST['submit'])) {
           </body>
           </html>';
     } else {
-        if ($_SESSION['execOutput'] == $_SESSION['question']) {
+        if ( $_SESSION['execOutput'] == $_SESSION['question']) {
             $_SESSION['shouldGenerate'] = True;
             echo '<p class="right">Right!  :-)</p>
                 <form action="index.php" id="r" name="r" method="post">
@@ -143,7 +143,7 @@ if (isset($_POST['submit'])) {
             $_SESSION['shouldGenerate'] = False;
             echo '<p class="wrong">Wrong!  :-(</p>
                 <p>Your program\'s output is wrong:</p>
-                <pre>-1</pre>
+                <pre> ' . $_SESSION['execOutput'] . ' - ' . $_SESSION['question'] . ' </pre>
                 <form action="index.php" id="r" name="r" method="post">
                 <input type="submit" name="again" id="again" value="Try again!" />
                 </form>
