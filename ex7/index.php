@@ -15,9 +15,11 @@ if ($_SESSION['shouldGenerate'] || !isset($_SESSION['question'])) {
 
 function validate($code) {
     $data = trim($code, "\r\n") . "\r\n";
+    $old_api = 'http://courses.softlab.ntua.gr/pl2/2016b/exercises/befunge93-api/?restrict';
+    $diy_api = 'http://127.0.0.1:5000/befunge_api/?restrict';
 
     $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, 'http://courses.softlab.ntua.gr/pl2/2016b/exercises/befunge93-api/?restrict');
+    curl_setopt($ch, CURLOPT_URL, $diy_api);
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_HTTPHEADER, array("Content-Type: text/plain"));
@@ -124,7 +126,7 @@ if (isset($_POST['submit'])) {
         $_SESSION['shouldGenerate'] = False;
         echo '<p class="wrong">Wrong!  :-(</p>
           <p>Your program is not legal:</p>
-          <pre>-1</pre>
+          <pre>'. $_SESSION['execOutput'] . '</pre>
           <form action="index.php" id="r" name="r" method="post">
           <input type="submit" name="again" id="again" value="Try again!" />
           </form>
@@ -143,7 +145,7 @@ if (isset($_POST['submit'])) {
             $_SESSION['shouldGenerate'] = False;
             echo '<p class="wrong">Wrong!  :-(</p>
                 <p>Your program\'s output is wrong:</p>
-                <pre> ' . $_SESSION['execOutput'] . ' - ' . $_SESSION['question'] . ' </pre>
+                <pre> ' . $_SESSION['execOutput'] . ' </pre>
                 <form action="index.php" id="r" name="r" method="post">
                 <input type="submit" name="again" id="again" value="Try again!" />
                 </form>
