@@ -1,34 +1,30 @@
-/* TODO:
- *  - printing seems fucked, fix
- * */
-
-
 #include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <time.h>
 
-//#define NUM_ROWS 80
-//#define NUM_COLUMNS 25
 #define NUM_ROWS 25
-#define NUM_COLUMNS 80
+#define NUM_COLUMNS 85
 
 #define TO_ASCII(x) ((x) + 0x30)
 #define FROM_ASCII(x) ((x) - 0x30)
 #define IS_NUM(c) ((c) >= 0x30 && (c) <= 0x39)
 #define IS_CHAR(c) (((c) >= 0x61 && (c) <= 0x7a) || ((c) >= 0x61 && (c) <= 0x7a))
 
-#define NEXT_RIGHT(x) ((x) + sizeof(byte))
-#define NEXT_LEFT(x) ((x) - sizeof(byte))
-#define NEXT_UP(x) ((x) + NUM_COLUMNS)
-#define NEXT_DOWN(x) ((x) - NUM_COLUMNS)
+#define NEXT_INSTRUCTION goto *(void **) (pc->addr)
 
-#define GET_OFFSET \
-    currentDirection == DIR_RIGHT ? sizeof(byte): (currentDirection == DIR_LEFT ? -sizeof(byte) : \
-    (currentDirection == DIR_UP ? -NUM_COLUMNS : NUM_COLUMNS));
+#define UPDATE_POSITION \
+    if ((currentDirection) == DIR_RIGHT) { \
+        currentColumn = (currentColumn + 1) % NUM_COLUMNS; \
+    }else if ((currentDirection) == DIR_LEFT) { \
+        currentColumn = (currentColumn - 1 >= 0) ? currentColumn - 1 : NUM_COLUMNS - 1; \
+    }else if ((currentDirection) == DIR_DOWN) { \
+        currentRow = (currentRow + 1) % NUM_ROWS; \
+    }else if ((currentDirection) == DIR_UP) { \
+        currentRow = (currentRow - 1 >= 0) ? currentRow - 1 : NUM_ROWS - 1; \
+    }
 
-#define NEXT_INSTRUCTION goto **(void **) pc->addr
 
 typedef signed long int data_byte;
 
@@ -85,64 +81,75 @@ typedef struct stack_cell_t {
 } stack_cell;
 
 typedef struct {
-    stack_cell* top;
+    //stack_cell* top;
+    int top;
+    int allocatedAmount;
+    data_byte* elems;
 } stack;
 
-void Push(stack* currentStack, data_byte toPush) {
-    assert(currentStack);
+void InitStack(stack* currentStack) { //TODO: handle failures
+    currentStack->top = -1;
+    currentStack->allocatedAmount = NUM_ROWS * NUM_COLUMNS;
+    currentStack->elems = (data_byte *) malloc(currentStack->allocatedAmount * sizeof(data_byte));
+}
 
-    if (currentStack->top == NULL) {
-        currentStack->top = (stack_cell *) malloc (sizeof(stack_cell));
-        currentStack->top->val = toPush;
-        currentStack->top->next = NULL;
-    }else {
-        stack_cell *temp = (stack_cell *) malloc (sizeof(stack_cell));
-        temp->val = toPush;
-        temp->next = currentStack->top;
-        currentStack->top = temp;
+void Push(stack* currentStack, data_byte toPush) {
+#ifdef DEBUG
+    assert(currentStack);
+#endif
+
+    if (currentStack->top + 1 == currentStack->allocatedAmount) {
+        //just double the current stack
+        data_byte* temp = (data_byte *) malloc(2 * currentStack->allocatedAmount * sizeof(data_byte));
+
+        for (int i = 0; i <= currentStack->top; i++) {
+            temp[i] = currentStack->elems[i];
+        }
+
+        free(currentStack->elems);
+        currentStack->elems = temp;
+        currentStack->allocatedAmount *= 2;
     }
+
+    currentStack->elems[++currentStack->top] = toPush;
 }
 
 data_byte Pop(stack* currentStack) {
+#ifdef DEBUG
     assert(currentStack);
+#endif
 
-    if (currentStack->top == NULL) {
+    if (currentStack->top == -1) {
         Push(currentStack, 0);
         return 0;
     }
 
-    stack_cell *temp = currentStack->top;
-    data_byte res = temp->val;
-    currentStack->top = currentStack->top->next;
-
-    free(temp);
-
-    return res;
-}
-
-void Examine(stack* currentStack) {
-    assert(currentStack);
-
-    printf("DEBUG: start of stack trace\n");
-    stack_cell *temp = currentStack->top;
-    while (temp != NULL) {
-        printf("val: %ld ASCII: %c\n", temp->val, (char) temp->val);
-        temp = temp->next;
-    }
-
-    printf("DEBUG: end of stack trace\n");
+    return currentStack->elems[currentStack->top--];
 }
 
 data_byte Peek(stack* currentStack) {
     assert(currentStack);
 
-    if (currentStack->top == NULL) {
+    if (currentStack->top == -1) {
         Push(currentStack, 0);
         return 0;
     }
 
-    return currentStack->top->val;
+    return currentStack->elems[currentStack->top];
 }
+
+#ifdef DEBUG
+void Examine(stack* currentStack, const char* func) {
+    assert(currentStack);
+    int temp = currentStack->top;
+
+    printf("STACK CONTENTS %s:\n", func);
+    while (temp >= 0) {
+        printf("%ld\n", currentStack->elems[temp--]);
+    }
+    printf("END OF STACK CONTENTS:\n");
+}
+#endif
 
 void ReadProgram(FILE *input) {
     char c;
@@ -159,7 +166,6 @@ void ReadProgram(FILE *input) {
             j = 0;
         }else {
             if ((IS_CHAR(c) && (c != 'p' || c != 'q')) || IS_NUM(c)) {
-            //if (c >= 0x30 && c <= 0x39 || (c >= )) {
                 program[i][j++].c = c;
             }else {
                 program[i][j++].c = c;
@@ -168,7 +174,12 @@ void ReadProgram(FILE *input) {
     }
 }
 
-void UpdatePosition(int* currentRow, int* currentColumn, pc_direction currentDirection) { //why is this even out here?
+#ifdef DEBUG
+void UpdatePosition(int* currentRow, int* currentColumn, pc_direction currentDirection) { //@SPEED
+#else
+//NOTE: no discernable difference in speed between this and the macro?
+inline void UpdatePosition(int* currentRow, int* currentColumn, pc_direction currentDirection) {
+#endif
     if (currentDirection == DIR_RIGHT) {
         *currentColumn = (*currentColumn + 1) % NUM_COLUMNS;
     }else if (currentDirection == DIR_LEFT) {
@@ -180,9 +191,9 @@ void UpdatePosition(int* currentRow, int* currentColumn, pc_direction currentDir
     }
 }
 
-void UpdateAddresses(void *labelTab[]) {
-    for (int i = 0; i < NUM_ROWS; i++) {
-        for (int j = 0; j < NUM_COLUMNS; j++) {
+void UpdateAddresses(void *labelTab[], int rowMin, int rowMax, int colMin, int colMax) {
+    for (int i = rowMin; i < rowMax; i++) {
+        for (int j = colMin; j < colMax; j++) {
             switch (program[i][j].c) {
                 case '+':
                     program[i][j].addr = labelTab[(int)COMMAND_ADD];
@@ -266,7 +277,7 @@ void UpdateAddresses(void *labelTab[]) {
                     program[i][j].addr = labelTab[(int)COMMAND_END];
                     break;
                 default:
-                    program[i][j].addr = NULL;
+                    program[i][j].addr = labelTab[(int)COMMAND_CNT];
                     break;
             }
         }
@@ -282,8 +293,8 @@ void Run() {
         &&modLabel,
         &&notLabel,
         &&dupLabel,
-        &&leftLabel,
         &&rightLabel,
+        &&leftLabel,
         &&upLabel,
         &&downLabel,
         &&randLabel,
@@ -302,16 +313,17 @@ void Run() {
         &&setPLLabel,
         &&stringmLabel,
         &&endLabel,
+        &&defaultLabel,
     };
 
     byte* pc;
     int currentRow = 0, currentColumn = 0;
     pc_direction currentDirection = DIR_RIGHT;
-    stack* programStack = (stack*) malloc(sizeof(stack));
-    programStack->top = NULL;
+    stack* programStack = (stack *) malloc(sizeof(stack));
+    InitStack(programStack);
 
     srand(time(NULL));
-    UpdateAddresses(labelTab);
+    UpdateAddresses(labelTab, 0, NUM_ROWS, 0, NUM_COLUMNS);
 
     for (;;) {
         pc = &program[currentRow][currentColumn];
@@ -321,74 +333,100 @@ void Run() {
                 case '+':
 addLabel:
                     {
+                        UpdatePosition(&currentRow, &currentColumn, currentDirection);
                         data_byte op2 = Pop(programStack);
                         data_byte op1 = Pop(programStack);
                         data_byte res = op1 + op2;
 
                         Push(programStack, res);
-
-                        //pc = program + (pc + GET_OFFSET) % (NUM_COLUMNS * NUM_ROWS * sizeof(byte));
+#ifdef DEBUG
+                        Examine(programStack, "+");
+#endif
+                        pc = &program[currentRow][currentColumn];
+                        NEXT_INSTRUCTION;
                         break;
                     }
                 case '-':
 subLabel:
                     {
+                        UpdatePosition(&currentRow, &currentColumn, currentDirection);
                         data_byte op2 = Pop(programStack);
                         data_byte op1 = Pop(programStack);
                         data_byte res = op1 - op2;
 
                         Push(programStack, res);
+
+                        pc = &program[currentRow][currentColumn];
+                        NEXT_INSTRUCTION;
                         break;
                     }
                 case '*':
 mulLabel:
                     {
+                        UpdatePosition(&currentRow, &currentColumn, currentDirection);
                         data_byte op2 = Pop(programStack);
                         data_byte op1 = Pop(programStack);
                         data_byte res = op1 * op2;
 
                         Push(programStack, res);
+
+                        pc = &program[currentRow][currentColumn];
+                        NEXT_INSTRUCTION;
                         break;
                     }
                 case '/':
 divLabel:
                     {
+                        UpdatePosition(&currentRow, &currentColumn, currentDirection);
                         data_byte op2 = Pop(programStack);
                         data_byte op1 = Pop(programStack);
                         data_byte res = op1 / op2;
 
                         Push(programStack, res);
+
+                        pc = &program[currentRow][currentColumn];
+                        NEXT_INSTRUCTION;
                         break;
                     }
                 case '%':
 modLabel:
                     {
+                        UpdatePosition(&currentRow, &currentColumn, currentDirection);
                         data_byte op2 = Pop(programStack);
                         data_byte op1 = Pop(programStack);
                         data_byte res = op1 % op2;
 
                         Push(programStack, res);
+
+                        pc = &program[currentRow][currentColumn];
+                        NEXT_INSTRUCTION;
                         break;
                     }
                 case '!':
 notLabel:
                     {
                         data_byte op = Pop(programStack);
+                        UpdatePosition(&currentRow, &currentColumn, currentDirection);
 
                         if (op == 0)
                             Push(programStack, 1);
                         else
                             Push(programStack, 0);
 
+                        pc = &program[currentRow][currentColumn];
+                        NEXT_INSTRUCTION;
                         break;
                     }
                 case ':':
 dupLabel:
                     {
                         data_byte op = Peek(programStack);
+                        UpdatePosition(&currentRow, &currentColumn, currentDirection);
 
                         Push(programStack, op);
 
+                        pc = &program[currentRow][currentColumn];
+                        NEXT_INSTRUCTION;
                         break;
                     }
                 case '>':
@@ -396,6 +434,9 @@ rightLabel:
                     {
                         currentDirection = DIR_RIGHT;
 
+                        UpdatePosition(&currentRow, &currentColumn, currentDirection);
+                        pc = &program[currentRow][currentColumn];
+                        NEXT_INSTRUCTION;
                         break;
                     }
                 case '<':
@@ -403,6 +444,9 @@ leftLabel:
                     {
                         currentDirection = DIR_LEFT;
 
+                        UpdatePosition(&currentRow, &currentColumn, currentDirection);
+                        pc = &program[currentRow][currentColumn];
+                        NEXT_INSTRUCTION;
                         break;
                     }
                 case '^':
@@ -410,6 +454,9 @@ upLabel:
                     {
                         currentDirection = DIR_UP;
 
+                        UpdatePosition(&currentRow, &currentColumn, currentDirection);
+                        pc = &program[currentRow][currentColumn];
+                        NEXT_INSTRUCTION;
                         break;
                     }
                 case 'v':
@@ -417,6 +464,12 @@ downLabel:
                     {
                         currentDirection = DIR_DOWN;
 
+#ifdef DEBUG
+                        Examine(programStack, "v");
+#endif
+                        UpdatePosition(&currentRow, &currentColumn, currentDirection);
+                        pc = &program[currentRow][currentColumn];
+                        NEXT_INSTRUCTION;
                         break;
                     }
                 case '?':
@@ -424,17 +477,22 @@ randLabel:
                     {
                         currentDirection = rand() % 4;
 
+                        UpdatePosition(&currentRow, &currentColumn, currentDirection);
+                        pc = &program[currentRow][currentColumn];
+                        NEXT_INSTRUCTION;
                         break;
                     }
                 case ' ':
 nullLabel:
                     {
+                        UpdatePosition(&currentRow, &currentColumn, currentDirection);
+                        pc = &program[currentRow][currentColumn];
+                        NEXT_INSTRUCTION;
                         break;
                     }
                 case '_':
 ifhorLabel:
                     {
-                        //Examine(programStack);
                         data_byte cond = Pop(programStack);
 
                         if (cond)
@@ -442,6 +500,9 @@ ifhorLabel:
                         else
                             currentDirection = DIR_RIGHT;
 
+                        UpdatePosition(&currentRow, &currentColumn, currentDirection);
+                        pc = &program[currentRow][currentColumn];
+                        NEXT_INSTRUCTION;
                         break;
                     }
                 case '|':
@@ -454,57 +515,78 @@ ifvertLabel:
                         else
                             currentDirection = DIR_DOWN;
 
+                        UpdatePosition(&currentRow, &currentColumn, currentDirection);
+                        pc = &program[currentRow][currentColumn];
+                        NEXT_INSTRUCTION;
                         break;
                     }
                 case '&':
 readNumLabel:
                     {
                         data_byte inp;
+                        UpdatePosition(&currentRow, &currentColumn, currentDirection);
 
                         scanf(" %ld", &inp);
                         Push(programStack, inp);
 
+                        pc = &program[currentRow][currentColumn];
+                        NEXT_INSTRUCTION;
                         break;
                     }
                 case '~':
 readAscLabel:
                     {
                         char c;
+                        UpdatePosition(&currentRow, &currentColumn, currentDirection);
 
                         scanf(" %c", &c);
                         Push(programStack, c);
 
+                        pc = &program[currentRow][currentColumn];
+                        NEXT_INSTRUCTION;
                         break;
                     }
                 case '.':
 writeNumLabel:
                     {
                         data_byte num = Pop(programStack);
+                        UpdatePosition(&currentRow, &currentColumn, currentDirection);
 
                         printf("%ld", num);
 
+                        pc = &program[currentRow][currentColumn];
+                        NEXT_INSTRUCTION;
                         break;
                     }
                 case ',':
 writeAscLabel:
                     {
                         data_byte c = Pop(programStack);
+                        UpdatePosition(&currentRow, &currentColumn, currentDirection);
 
                         printf("%c", (char) c);
 
+                        pc = &program[currentRow][currentColumn];
+                        NEXT_INSTRUCTION;
                         break;
                     }
                 case '#':
 bridgeLabel:
                     {
                         UpdatePosition(&currentRow, &currentColumn, currentDirection);
+                        UpdatePosition(&currentRow, &currentColumn, currentDirection);
+                        pc = &program[currentRow][currentColumn];
+                        NEXT_INSTRUCTION;
                         break;
                     }
                 case '$':
 popLabel:
                     {
+                        UpdatePosition(&currentRow, &currentColumn, currentDirection);
                         Pop(programStack);
 
+                        pc = &program[currentRow][currentColumn];
+                        NEXT_INSTRUCTION;
                         break;
                     }
                 case '\\':
@@ -512,10 +594,13 @@ swpLabel:
                     {
                         data_byte upper = Pop(programStack);
                         data_byte lower = Pop(programStack);
+                        UpdatePosition(&currentRow, &currentColumn, currentDirection);
 
                         Push(programStack, upper);
                         Push(programStack, lower);
 
+                        pc = &program[currentRow][currentColumn];
+                        NEXT_INSTRUCTION;
                         break;
                     }
                 case '`':
@@ -523,9 +608,12 @@ gtLabel:
                     {
                         data_byte op2 = Pop(programStack);
                         data_byte op1 = Pop(programStack);
+                        UpdatePosition(&currentRow, &currentColumn, currentDirection);
 
                         op1 > op2 ? Push(programStack, 1) : Push(programStack, 0);
 
+                        pc = &program[currentRow][currentColumn];
+                        NEXT_INSTRUCTION;
                         break;
                     }
                 case 'g':
@@ -533,10 +621,13 @@ getPLLabel:
                     {
                         data_byte y = Pop(programStack);
                         data_byte x = Pop(programStack);
+                        UpdatePosition(&currentRow, &currentColumn, currentDirection);
 
                         byte temp = program[y][x];
                         Push(programStack, temp.c);
 
+                        pc = &program[currentRow][currentColumn];
+                        NEXT_INSTRUCTION;
                         break;
                     }
                 case 'p':
@@ -545,8 +636,12 @@ setPLLabel:
                         data_byte y = Pop(programStack);
                         data_byte x = Pop(programStack);
                         data_byte val = Pop(programStack);
+                        UpdatePosition(&currentRow, &currentColumn, currentDirection);
 
                         program[y][x].c = (char) val;
+                        UpdateAddresses(labelTab, y, y + 1, x, x + 1);
+                        pc = &program[currentRow][currentColumn];
+                        NEXT_INSTRUCTION;
                         break;
                     }
                 case '"':
@@ -554,26 +649,41 @@ stringmLabel:
                     {
                         inStringMode = !inStringMode;
 
+                        UpdatePosition(&currentRow, &currentColumn, currentDirection);
+                        pc = &program[currentRow][currentColumn];
+                        goto stringModeLabel;
                         break;
                     }
                 case '@':
 endLabel:
                     goto terminate;
                 default:
-                    Push(programStack, FROM_ASCII(pc->c));
-                    break;
-                    //printf("ERROR: unrecognized command \"%c\", will terminate\n", pc->c);
-                    //goto terminate;
+defaultLabel:
+                    {
+                        UpdatePosition(&currentRow, &currentColumn, currentDirection);
+                        Push(programStack, FROM_ASCII(pc->c));
+                        pc = &program[currentRow][currentColumn];
+                        NEXT_INSTRUCTION;
+                        break;
+                    }
             }
         }else {
 stringModeLabel:
-            if (pc->c == '"')
+            if (pc->c == '"') {
                 inStringMode = !inStringMode;
-            else
+
+                UpdatePosition(&currentRow, &currentColumn, currentDirection);
+                pc = &program[currentRow][currentColumn];
+                NEXT_INSTRUCTION;
+            } else {
                 Push(programStack, pc->c);
+
+                UpdatePosition(&currentRow, &currentColumn, currentDirection);
+                pc = &program[currentRow][currentColumn];
+                goto stringModeLabel;
+            }
         }
 
-        UpdatePosition(&currentRow, &currentColumn, currentDirection);
     }
 
 terminate:

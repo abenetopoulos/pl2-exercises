@@ -50,9 +50,9 @@ def get_next_position(befungeProg, currentRow, currentColumn, prepend) :
 
     return prepend, currentRow, currentColumn
 
-for i in xrange(11):
+for i in xrange(10):
     r = ses.get(webpageURL)
-    cookies = ses.cookies
+    ##cookies = ses.cookies
     openRes = r.content
 
     for l in openRes.split('\n'):
@@ -61,7 +61,7 @@ for i in xrange(11):
             targetNum = int(targetString[-3].split("<")[0])
             break
 
-    print 'Round ' + str(i) + ', number ' + str(targetNum)
+    print 'Round ' + str(i + 1) + ', number ' + str(targetNum)
     powers = powers_of_two(targetNum)
     befungeProg = [[' ' for x in range(width)] for y in range(height)]
     currentRow = 0

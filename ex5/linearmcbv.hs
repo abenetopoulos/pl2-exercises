@@ -15,18 +15,18 @@ next _ = []
 
 instance Read E where
     readsPrec p s =
-      [(Literal c, r)        |  ('#', t) <- next s, (c, r) <- next t] ++
-      [(Write e1 e2, r)  |  ('+', t1) <- next s,
-                            (e1, t2) <- readsPrec 0 t1,
-                            (e2, r) <- readsPrec 0 t2] ++
-      [(Read e, r)       |  ('-', t) <- next s, (e, r) <- readsPrec 0 t] ++
-      [(Variable x, r)        |  (x, r) <- next s, isLower x] ++
-      [(Lambda x e, r)      |  ('/', t1) <- next s,
-                            (x, t2) <- next t1, isLower x,
-                            (e, r) <- readsPrec 0 t2] ++
-      [(Application e1 e2, r)    |  ('@', t1) <- next s,
-                            (e1, t2) <- readsPrec 0 t1,
-                            (e2, r) <- readsPrec 0 t2]
+      [(Literal c, r)           |   ('#', t) <- next s, (c, r) <- next t] ++
+      [(Write e1 e2, r)         |   ('+', t1) <- next s,
+                                    (e1, t2) <- readsPrec 0 t1,
+                                    (e2, r) <- readsPrec 0 t2] ++
+      [(Read e, r)              |   ('-', t) <- next s, (e, r) <- readsPrec 0 t] ++
+      [(Variable x, r)          |   (x, r) <- next s, isLower x] ++
+      [(Lambda x e, r)          |   ('/', t1) <- next s,
+                                    (x, t2) <- next t1, isLower x,
+                                    (e, r) <- readsPrec 0 t2] ++
+      [(Application e1 e2, r)   |   ('@', t1) <- next s,
+                                    (e1, t2) <- readsPrec 0 t1,
+                                    (e2, r) <- readsPrec 0 t2]
 
 main = do
     contents <- getContents

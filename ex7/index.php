@@ -3,7 +3,7 @@
 session_start();
 
 $minVal = 1000;
-$maxVal = 1000000;
+$maxVal = 100000000;
 
 if (isset($_POST['reset']))
     $_SESSION['shouldGenerate'] = True;
